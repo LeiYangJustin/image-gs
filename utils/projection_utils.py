@@ -90,7 +90,8 @@ def camera_to_world(
         t = torch.from_numpy(t.copy()).float()
     R = R.to(P_cam.device)
     t = t.to(P_cam.device)
-    # P_world = R^T @ (P_cam - t)  ⟺  (P_cam - t) @ R  (row-vector convention)
+    # P_world = R^T @ (P_cam - t),  which in row-vector convention is
+    # (P_cam - t) @ R  — the two forms are numerically identical.
     return (P_cam - t.unsqueeze(0)) @ R
 
 
@@ -244,14 +245,15 @@ def lift_gaussians_to_3d(
     sz_metric = (thin_ratio * torch.minimum(sx_metric, sy_metric)).clamp(min=1e-6)
 
     # ---- 3-D orientation ----
-    # Camera axes in world space (rows of R give world-to-camera basis):
-    #   cam_right = R^T @ [1,0,0]  = R[0, :] (first row of R)
-    #   cam_down  = R^T @ [0,1,0]  = R[1, :]
-    #   cam_fwd   = R^T @ [0,0,1]  = R[2, :]
+    # Camera axes in world space.
+    # R is the world-to-camera rotation: P_cam = R @ P_world.
+    # The world-space direction that maps to camera +X is v = R^T @ [1,0,0],
+    # which in index form equals the first ROW of R: R[0, :].
+    # This also equals the first COLUMN of the camera-to-world matrix R^T.
     R_np = R_t.cpu().numpy()
-    cam_right = R_np[0, :]  # (3,)
-    cam_down  = R_np[1, :]  # (3,)
-    cam_fwd   = R_np[2, :]  # (3,)
+    cam_right = R_np[0, :]  # R^T @ [1,0,0] — world direction → camera +X (image right)
+    cam_down  = R_np[1, :]  # R^T @ [0,1,0] — world direction → camera +Y (image down)
+    cam_fwd   = R_np[2, :]  # R^T @ [0,0,1] — world direction → camera +Z (forward)
 
     rot_np = rot_rad.squeeze(-1).cpu().numpy()  # (N,)
     cos_r = np.cos(rot_np)                       # (N,)
