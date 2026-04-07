@@ -229,7 +229,7 @@ def lift(args):
         load_depth_model,
         sample_depth_at_positions,
     )
-    from utils.projection_utils import export_3dgs_ply, lift_gaussians_to_3d
+    from utils.projection_utils import export_3dgs_ply, export_pointcloud_ply, lift_gaussians_to_3d
 
     device = args.device
     print(f"[lift_to_3d] Device: {device}")
@@ -344,6 +344,20 @@ def lift(args):
     print(f"[lift_to_3d] Done. Written {N:,} 3D Gaussians to '{args.output_path}' "
           f"({file_size_kb:.1f} KB)")
 
+    # ---- 11. Export coloured point cloud (MeshLab-compatible) ----
+    if not args.no_pointcloud:
+        base, ext = os.path.splitext(args.output_path)
+        pc_path = base + "_points" + (ext if ext else ".ply")
+        print(f"[lift_to_3d] Exporting coloured point cloud: {pc_path}")
+        export_pointcloud_ply(
+            path=pc_path,
+            means3d=result["means3d"],
+            colors=result["colors"],
+        )
+        pc_size_kb = os.path.getsize(pc_path) / 1024.0
+        print(f"[lift_to_3d] Point cloud written ({pc_size_kb:.1f} KB). "
+              f"Open in MeshLab / CloudCompare / Blender.")
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -423,6 +437,9 @@ def _build_parser() -> argparse.ArgumentParser:
     gau.add_argument("--thin_ratio", type=float, default=0.05,
                      help="Depth-axis scale as a fraction of the smaller in-plane scale.  "
                           "Default: 0.05 (5%%).")
+    gau.add_argument("--no_pointcloud", action="store_true",
+                     help="Skip saving the additional MeshLab-compatible coloured "
+                          "point cloud PLY (saved as <output>_points.ply by default).")
 
     # Misc
     p.add_argument("--device", default="cuda",

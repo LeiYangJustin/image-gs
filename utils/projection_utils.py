@@ -405,3 +405,63 @@ def export_3dgs_ply(
     with open(path, "wb") as f:
         f.write(header.encode("ascii"))
         f.write(data.tobytes())
+
+
+def export_pointcloud_ply(
+    path: str,
+    means3d: np.ndarray,
+    colors: np.ndarray,
+) -> None:
+    """Export 3-D Gaussian centres as a coloured point cloud PLY file.
+
+    The output format uses ``uchar`` (0-255) RGB vertex colours so that the
+    file is directly readable by MeshLab, CloudCompare, Blender, and any other
+    standard point-cloud viewer.  No Gaussian splatting-specific attributes are
+    included.
+
+    Args:
+        path: Output ``.ply`` file path.
+        means3d: ``(N, 3)`` float32 array — world-space positions.
+        colors: ``(N, C)`` float32 array — linear colours in ``[0, 1]``.
+            If ``C == 1`` the single channel is replicated to RGB.
+            If ``C >= 3`` only the first three channels are used.
+    """
+    N = means3d.shape[0]
+
+    # Map to 3-channel uint8
+    if colors.shape[1] == 1:
+        rgb = np.repeat(colors, 3, axis=1)
+    elif colors.shape[1] >= 3:
+        rgb = colors[:, :3]
+    else:
+        pad = np.zeros((N, 3 - colors.shape[1]), dtype=np.float32)
+        rgb = np.concatenate([colors, pad], axis=1)
+    rgb_u8 = np.clip(rgb * 255.0, 0, 255).astype(np.uint8)
+
+    header_lines = [
+        "ply",
+        "format binary_little_endian 1.0",
+        f"element vertex {N}",
+        "property float x",
+        "property float y",
+        "property float z",
+        "property uchar red",
+        "property uchar green",
+        "property uchar blue",
+        "end_header",
+    ]
+    header = "\n".join(header_lines) + "\n"
+
+    dtype = np.dtype([
+        ("x", np.float32), ("y", np.float32), ("z", np.float32),
+        ("red", np.uint8), ("green", np.uint8), ("blue", np.uint8),
+    ])
+    data = np.zeros(N, dtype=dtype)
+    data["x"], data["y"], data["z"] = means3d[:, 0], means3d[:, 1], means3d[:, 2]
+    data["red"]   = rgb_u8[:, 0]
+    data["green"] = rgb_u8[:, 1]
+    data["blue"]  = rgb_u8[:, 2]
+
+    with open(path, "wb") as f:
+        f.write(header.encode("ascii"))
+        f.write(data.tobytes())
