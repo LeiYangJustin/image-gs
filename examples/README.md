@@ -48,7 +48,7 @@ python lift_to_3d.py \
     --depth_scale 0.0001 \
     --depth_shift 0.0 \
     --fx 200 --fy 200 --cx 100 --cy 100 \
-    --R "1 0 0  0 0.866 -0.5  0 0.5 0.866" \
+    --R "1 0 0  0 0.866 -0.5  0 0.5 0.866" \   # 30° X-axis tilt (cos30°≈0.866, sin30°=0.5)
     --t "0 -0.5 3.0" \
     --output_path examples/output/radial_3dgs.ply \
     --device cpu
