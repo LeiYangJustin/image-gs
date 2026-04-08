@@ -113,6 +113,52 @@ def _load_checkpoint_params(ckpt_path: str, device: str):
     return xy, scale, rot, feat
 
 
+def _render_2d_image(
+    xy: "torch.Tensor",
+    scale_pixels: "torch.Tensor",
+    rot: "torch.Tensor",
+    feat: "torch.Tensor",
+    img_h: int,
+    img_w: int,
+) -> np.ndarray:
+    """Render the Image-GS 2D Gaussian splatting reconstruction.
+
+    Reproduces the forward pass from ``model.py`` (tile-based renderer with
+    top-K normalisation, which is the default training configuration).
+
+    Args:
+        xy: Gaussian centres in normalised [0, 1] coordinates, shape ``(N, 2)``.
+        scale_pixels: Gaussian scales in pixels, shape ``(N, 2)``.
+        rot: Gaussian orientation angles in radians, shape ``(N, 1)``.
+        feat: Per-Gaussian colour features in [0, 1], shape ``(N, C)``.
+        img_h: Output image height in pixels.
+        img_w: Output image width in pixels.
+
+    Returns:
+        ``np.ndarray`` of shape ``(img_h, img_w, C)`` with dtype ``uint8``.
+    """
+    from gsplat import project_gaussians_2d_scale_rot, rasterize_gaussians_sum
+
+    BLOCK_H, BLOCK_W = 16, 16
+    tile_bounds = (
+        (img_w + BLOCK_W - 1) // BLOCK_W,
+        (img_h + BLOCK_H - 1) // BLOCK_H,
+        1,
+    )
+    with torch.no_grad():
+        xy_proj, radii, conics, num_tiles_hit = project_gaussians_2d_scale_rot(
+            xy, scale_pixels, rot, img_h, img_w, tile_bounds
+        )
+        # topk_norm=True matches the default training configuration
+        out_img = rasterize_gaussians_sum(
+            xy_proj, radii, conics, num_tiles_hit, feat,
+            img_h, img_w, BLOCK_H, BLOCK_W, topk_norm=True,
+        )
+    # out_img shape: (img_h, img_w, C)
+    out_np = (out_img.clamp(0.0, 1.0).cpu().numpy() * 255).astype(np.uint8)
+    return out_np
+
+
 def _load_image_rgb_uint8(image_path: str) -> np.ndarray:
     """Load an image as a ``(H, W, 3)`` uint8 RGB array."""
     img = cv2.imread(image_path, cv2.IMREAD_COLOR)
@@ -365,6 +411,21 @@ def lift(args):
         print(f"[lift_to_3d] Point cloud written ({pc_size_kb:.1f} KB). "
               f"Open in MeshLab / CloudCompare / Blender.")
 
+    # ---- 12. Render 2D Image-GS result ----
+    if args.render_2d:
+        # Derive output path: place next to the PLY, named after the source image
+        scene_stem = os.path.splitext(os.path.basename(args.image_path))[0]
+        out_dir = os.path.dirname(os.path.abspath(args.output_path))
+        render_path = os.path.join(out_dir, f"{scene_stem}_render.png")
+        print(f"[lift_to_3d] Rendering 2D Image-GS result → '{render_path}' …")
+        render_np = _render_2d_image(xy, scale_pixels, rot, feat, img_h, img_w)
+        # Save: cv2 expects BGR for colour images
+        if render_np.ndim == 3 and render_np.shape[2] == 3:
+            render_np = cv2.cvtColor(render_np, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(render_path, render_np)
+        render_size_kb = os.path.getsize(render_path) / 1024.0
+        print(f"[lift_to_3d] 2D render written ({render_size_kb:.1f} KB).")
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -447,6 +508,10 @@ def _build_parser() -> argparse.ArgumentParser:
     gau.add_argument("--no_pointcloud", action="store_true",
                      help="Skip saving the additional MeshLab-compatible coloured "
                           "point cloud PLY (saved as <output>_points.ply by default).")
+    gau.add_argument("--render_2d", action="store_true",
+                     help="Also render and save the 2D Image-GS reconstruction as a PNG "
+                          "image alongside the PLY output.  The file is written to "
+                          "<output_dir>/<scene_name>_render.png.")
 
     # Misc
     p.add_argument("--device", default="cuda",
