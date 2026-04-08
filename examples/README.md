@@ -41,12 +41,13 @@ optimiser learns.
 
 ## Output files (`output/`)
 
-Each scene produces **two** PLY files:
+Each scene produces **two** PLY files, and optionally a 2D Image-GS render when `--render_2d` is passed:
 
 | File | Use |
 |---|---|
 | `<name>_3dgs.ply` | Full 3DGS splat (positions, log-scales, quaternions, SH colours). Load in **SuperSplat**, **SIBR**, or **nerfstudio**. |
 | `<name>_3dgs_points.ply` | Coloured point cloud (XYZ + RGB uint8). Load in **MeshLab**, CloudCompare, or Blender. |
+| `<name>_render.png` | 2D Image-GS reconstruction rendered from the Gaussian parameters (produced when `--render_2d` is passed). |
 
 ## Opening in MeshLab
 
@@ -133,9 +134,11 @@ python lift_to_3d.py \
     --depth_shift 0.0 \
     --fx 1929.69 --fy 1929.69 --cx 1402 --cy 826 \
     --output_path examples/output/iw_lg_1_3dgs.ply \
+    --render_2d \
     --device cpu
 ```
 
 **Outputs:**
 - `output/iw_lg_1_3dgs.ply` — 1.66 MB, 25 000 3DGS splats
 - `output/iw_lg_1_3dgs_points.ply` — 366 KB coloured point cloud (open in MeshLab)
+- `output/iw_lg_1_render.png` — 2D Image-GS reconstruction rendered from the Gaussian parameters
