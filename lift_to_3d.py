@@ -80,6 +80,10 @@ import cv2
 import numpy as np
 import torch
 
+# Minimum depth (metres) clamped after depth estimation to avoid near-zero
+# depths that would produce ill-conditioned unprojections.
+_MIN_DEPTH_M = 1e-3
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -97,6 +101,9 @@ def _load_checkpoint_params(ckpt_path: str, device: str):
     """
     if not os.path.isfile(ckpt_path):
         raise FileNotFoundError(f"Checkpoint not found: '{ckpt_path}'")
+    # weights_only=False is required because Image-GS checkpoints contain
+    # nn.Parameter tensors saved with torch.save.  Only load checkpoints from
+    # trusted sources; do not pass user-supplied paths without validation.
     checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
     state_dict = checkpoint["state_dict"]
     xy   = state_dict["xy"].to(device)
@@ -311,7 +318,7 @@ def lift(args):
     depths = sample_depth_at_positions(depth_np, xy)
 
     # Clamp negative depths (can occur when relative depth has negative values)
-    depths = depths.clamp(min=1e-3)
+    depths = depths.clamp(min=_MIN_DEPTH_M)
 
     # ---- 9. Lift to 3D ----
     print("[lift_to_3d] Lifting Gaussians to 3D …")

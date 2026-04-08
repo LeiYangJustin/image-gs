@@ -25,6 +25,9 @@ import struct
 import numpy as np
 import torch
 
+# Numerical stability floor used throughout quaternion / scale computations.
+_EPS = 1e-8
+
 
 # ---------------------------------------------------------------------------
 # Unprojection helpers
@@ -126,7 +129,7 @@ def _rotation_matrices_to_quaternions(R3d: np.ndarray) -> np.ndarray:
                 (R[1, 0] - R[0, 1]) * s,
             ]
         elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
-            s = 2.0 * math.sqrt(max(1e-8, 1.0 + R[0, 0] - R[1, 1] - R[2, 2]))
+            s = 2.0 * math.sqrt(max(_EPS, 1.0 + R[0, 0] - R[1, 1] - R[2, 2]))
             quats[i] = [
                 (R[2, 1] - R[1, 2]) / s,
                 0.25 * s,
@@ -134,7 +137,7 @@ def _rotation_matrices_to_quaternions(R3d: np.ndarray) -> np.ndarray:
                 (R[0, 2] + R[2, 0]) / s,
             ]
         elif R[1, 1] > R[2, 2]:
-            s = 2.0 * math.sqrt(max(1e-8, 1.0 + R[1, 1] - R[0, 0] - R[2, 2]))
+            s = 2.0 * math.sqrt(max(_EPS, 1.0 + R[1, 1] - R[0, 0] - R[2, 2]))
             quats[i] = [
                 (R[0, 2] - R[2, 0]) / s,
                 (R[0, 1] + R[1, 0]) / s,
@@ -142,7 +145,7 @@ def _rotation_matrices_to_quaternions(R3d: np.ndarray) -> np.ndarray:
                 (R[1, 2] + R[2, 1]) / s,
             ]
         else:
-            s = 2.0 * math.sqrt(max(1e-8, 1.0 + R[2, 2] - R[0, 0] - R[1, 1]))
+            s = 2.0 * math.sqrt(max(_EPS, 1.0 + R[2, 2] - R[0, 0] - R[1, 1]))
             quats[i] = [
                 (R[1, 0] - R[0, 1]) / s,
                 (R[0, 2] + R[2, 0]) / s,
@@ -269,9 +272,9 @@ def lift_gaussians_to_3d(
     axis3 = np.broadcast_to(cam_fwd[None, :], (len(rot_np), 3)).copy()  # (N, 3)
 
     # Normalise (each row should already be unit length, but ensure numerics)
-    axis1 /= np.linalg.norm(axis1, axis=1, keepdims=True).clip(1e-8)
-    axis2 /= np.linalg.norm(axis2, axis=1, keepdims=True).clip(1e-8)
-    axis3 /= np.linalg.norm(axis3, axis=1, keepdims=True).clip(1e-8)
+    axis1 /= np.linalg.norm(axis1, axis=1, keepdims=True).clip(_EPS)
+    axis2 /= np.linalg.norm(axis2, axis=1, keepdims=True).clip(_EPS)
+    axis3 /= np.linalg.norm(axis3, axis=1, keepdims=True).clip(_EPS)
 
     # Assemble (N, 3, 3) rotation matrices with axes as columns
     R3d = np.stack([axis1, axis2, axis3], axis=2).astype(np.float32)  # (N, 3, 3)
